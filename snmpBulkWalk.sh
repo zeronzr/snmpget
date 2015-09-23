@@ -27,6 +27,7 @@ echo Checking for SNMP package...
   if [ "" == "$pkg_ok" ]; then
     echo "SNMP not found. Setting up SNMP package. Require elevation."
     sudo apt-get --force-yes --yes install snmp
+    ./download-mibs
   else
     echo "SNMP Already Installed."
   fi

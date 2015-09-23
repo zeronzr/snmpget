@@ -1,0 +1,116 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+
+SMISTRIP=/usr/bin/smistrip
+CONFDIR=./snmp-mibs-downloader
+
+echo ""
+echo "Downloading documents and extracting MIB files."
+echo "This will take some minutes."
+echo ""
+echo "In case this process fails, it can always be repeated later by executing"
+echo "$0 again."
+echo ""
+
+. $CONFDIR/snmp-mibs-downloader.conf
+
+download_mibs()
+{
+    TMP=`mktemp -d`
+    if [ ! -z "$ARCHIVE" ]
+    then
+	ARCHTMP=`mktemp -d`
+	if [ "$ARCHTYPE" == "dirgz" ]
+	then
+	    if [ ! -z "$HOST" ]
+	    then
+		echo "Downloading a whole directory with compressed content"
+		echo "is not supported."
+		exit 1
+	    else
+		cp $DIR/$ARCHIVE/* $ARCHTMP/
+		gzip -d $ARCHTMP/* || /bin/true
+	    fi
+	else
+	    if [ ! -z "$HOST" ]
+	    then
+		wget -O $ARCHTMP/$ARCHIVE -q -nv $HOST/$DIR/$ARCHIVE
+	    else
+		cp $DIR/$ARCHIVE $ARCHTMP/$ARCHIVE
+	    fi
+	    if [ "$ARCHTYPE" == "tar" ]
+	    then
+		tar -C $ARCHTMP -xf $ARCHTMP/$ARCHIVE
+	    fi
+	    if [ "$ARCHTYPE" == "tgz" ]
+	    then
+		tar -C $ARCHTMP -xzf $ARCHTMP/$ARCHIVE
+	    fi
+	    if [ "$ARCHTYPE" == "zip" ]
+	    then
+		unzip -d $ARCHTMP $ARCHTMP/$ARCHIVE
+	    fi
+	fi
+    fi
+    cat $CONFDIR/$CONF | while read file mibs;
+	do
+	    if [ "$file" != "#" ]
+	    then
+		if [ ! -z "$PREFIX" ]
+		then
+		    file=$PREFIX$file
+		fi
+		if [ ! -z "$SUFFIX" ]
+		then
+		    file=$file$SUFFIX
+		fi
+		if [ -z "$ARCHIVE" ]
+		then
+		    wget -O - -q -nv $HOST/$DIR/$file | tr -d \\r | $SMISTRIP -v -a -d $TMP -m $mibs -
+		else
+		    cat $ARCHTMP/$ARCHDIR/$file | tr -d \\r | $SMISTRIP -v -a -d $TMP -m $mibs -
+		fi
+	    fi
+	done
+    if [ ! -z "$DIFF" ]
+    then
+	patch -d $TMP < $CONFDIR/$DIFF
+    fi
+    if [ ! -d $BASEDIR/$DEST ]
+    then
+	mkdir -p $BASEDIR/$DEST
+    fi
+    cp $TMP/* $BASEDIR/$DEST
+    rm -f $BASEDIR/$DEST/.index
+    rm -fr $TMP
+    if [ ! -z "$ARCHTMP" ]
+    then
+	rm -rf $ARCHTMP
+    fi
+}
+
+sources=$1
+if [ -z "$sources" ]
+then
+    sources=$AUTOLOAD
+fi
+
+for i in $sources
+do
+    TMP=
+    ARCHTMP=
+    HOST=
+    DIR=
+    CONF=
+    DEST=
+    DIFF=
+    PREFIX=
+    SUFFIX=
+    ARCHIVE=
+    ARCHTYPE=
+    ARCHDIR=
+    . $CONFDIR/$i.conf
+    download_mibs
+done
