@@ -11,9 +11,11 @@ echo This script will install the net-snmp packages and get the Serial Number
 echo and the MAC Address of the specified Switch.
 echo
 echo Hit Enter to continue...
+read enter
 
 linux=$(uname -a | grep "Ubuntu")
 mac=$(uname -a | grep "Darwin")
+
 
 if [ "Darwin" == "$mac" ]; then
 
